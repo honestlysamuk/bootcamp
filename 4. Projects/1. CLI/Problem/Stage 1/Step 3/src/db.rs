@@ -36,31 +36,29 @@ impl JiraDatabase {
         state.last_item_id += 1;
         state.stories.insert(state.last_item_id, story);
         match state.epics.entry(epic_id) {
-            Entry::Vacant(_) => return Err(anyhow!("{epic_id} is not an epic.")),
+            Entry::Vacant(_) => Err(anyhow!("{epic_id} is not an epic.")),
             Entry::Occupied(epic) => {
                 epic.into_mut().stories.insert(state.last_item_id);
+                self.database.write_db(&state)?;
+                Ok(state.last_item_id)
             }
         }
-
-        self.database.write_db(&state)?;
-        Ok(state.last_item_id)
     }
 
     pub fn delete_epic(&self, epic_id: u32) -> Result<()> {
         let mut state = self.database.read_db()?;
 
         match state.epics.entry(epic_id) {
-            Entry::Vacant(_) => return Err(anyhow!("No epics found with id {epic_id}")),
+            Entry::Vacant(_) => Err(anyhow!("No epics found with id {epic_id}")),
             Entry::Occupied(epic) => {
                 epic.into_mut().stories.iter().for_each(|s| {
                     state.stories.remove(&s);
                 });
                 state.epics.remove(&epic_id);
+                self.database.write_db(&state)?;
+                Ok(())
             }
         }
-
-        self.database.write_db(&state)?;
-        Ok(())
     }
 
     pub fn delete_story(&self, epic_id: u32, story_id: u32) -> Result<()> {
@@ -71,24 +69,22 @@ impl JiraDatabase {
             .ok_or(anyhow!("No stories found with id {story_id}"))?;
 
         match state.epics.entry(epic_id) {
-            Entry::Vacant(_) => return Err(anyhow!("bad")),
+            Entry::Vacant(_) => Err(anyhow!("Database has no epic with key {epic_id}")),
             Entry::Occupied(epic) => {
                 epic.into_mut().stories.remove(&story_id);
+                self.database.write_db(&state)?;
+                Ok(())
             }
         }
-        self.database.write_db(&state)?;
-        Ok(())
     }
 
     pub fn update_epic_status(&self, epic_id: u32, status: Status) -> Result<()> {
         let mut state = self.database.read_db()?;
-        match state.epics.contains_key(&epic_id) {
-            false => Err(anyhow!("Database has no epic with key {epic_id}")),
-            true => {
-                state
-                    .epics
-                    .entry(epic_id)
-                    .and_modify(|epic| epic.status = status);
+
+        match state.epics.entry(epic_id) {
+            Entry::Vacant(_) => Err(anyhow!("Database has no epic with key {epic_id}")),
+            Entry::Occupied(epic) => {
+                epic.into_mut().status = status;
                 self.database.write_db(&state)?;
                 Ok(())
             }
@@ -97,13 +93,11 @@ impl JiraDatabase {
 
     pub fn update_story_status(&self, story_id: u32, status: Status) -> Result<()> {
         let mut state = self.database.read_db()?;
-        match state.stories.contains_key(&story_id) {
-            false => Err(anyhow!("Database has no story with key {story_id}")),
-            true => {
-                state
-                    .stories
-                    .entry(story_id)
-                    .and_modify(|story| story.status = status);
+
+        match state.stories.entry(story_id) {
+            Entry::Vacant(_) => Err(anyhow!("Database has no epic with key {epic_id}")),
+            Entry::Occupied(story) => {
+                story.into_mut().status = status;
                 self.database.write_db(&state)?;
                 Ok(())
             }
