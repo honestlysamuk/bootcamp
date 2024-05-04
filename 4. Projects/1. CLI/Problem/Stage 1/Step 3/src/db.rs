@@ -2,6 +2,7 @@ use std::fs;
 
 use anyhow::anyhow;
 use anyhow::Result;
+use std::collections::hash_map::Entry;
 use std::collections::HashSet;
 
 use crate::models::{DBState, Epic, Status, Story};
@@ -31,21 +32,33 @@ impl JiraDatabase {
 
     pub fn create_story(&self, story: Story, epic_id: u32) -> Result<u32> {
         let mut state = self.database.read_db()?;
+
         state.last_item_id += 1;
         state.stories.insert(state.last_item_id, story);
-        state.epics.entry(epic_id).and_modify(|epic| {
-            epic.stories.insert(state.last_item_id);
-        });
+        match state.epics.entry(epic_id) {
+            Entry::Vacant(_) => return Err(anyhow!("{epic_id} is not an epic.")),
+            Entry::Occupied(epic) => {
+                epic.into_mut().stories.insert(state.last_item_id);
+            }
+        }
+
         self.database.write_db(&state)?;
         Ok(state.last_item_id)
     }
 
     pub fn delete_epic(&self, epic_id: u32) -> Result<()> {
         let mut state = self.database.read_db()?;
-        state
-            .epics
-            .remove(&epic_id)
-            .ok_or(anyhow!("No epics found with id {epic_id}"))?;
+
+        match state.epics.entry(epic_id) {
+            Entry::Vacant(_) => return Err(anyhow!("No epics found with id {epic_id}")),
+            Entry::Occupied(epic) => {
+                epic.into_mut().stories.iter().for_each(|s| {
+                    state.stories.remove(&s);
+                });
+                state.epics.remove(&epic_id);
+            }
+        }
+
         self.database.write_db(&state)?;
         Ok(())
     }
@@ -56,9 +69,13 @@ impl JiraDatabase {
             .stories
             .remove(&story_id)
             .ok_or(anyhow!("No stories found with id {story_id}"))?;
-        state.epics.entry(epic_id).and_modify(|epic| {
-            epic.stories.remove(&story_id);
-        });
+
+        match state.epics.entry(epic_id) {
+            Entry::Vacant(_) => return Err(anyhow!("bad")),
+            Entry::Occupied(epic) => {
+                epic.into_mut().stories.remove(&story_id);
+            }
+        }
         self.database.write_db(&state)?;
         Ok(())
     }
