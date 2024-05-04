@@ -1,6 +1,8 @@
 use std::fs;
 
+use anyhow::anyhow;
 use anyhow::Result;
+use std::collections::HashSet;
 
 use crate::models::{DBState, Epic, Status, Story};
 
@@ -31,38 +33,64 @@ impl JiraDatabase {
         let mut state = self.database.read_db()?;
         state.last_item_id += 1;
         state.stories.insert(state.last_item_id, story);
-        state.epics.entry(epic_id).and_modify(|epic| epic.stories.push(state.last_item_id));
+        state.epics.entry(epic_id).and_modify(|epic| {
+            epic.stories.insert(state.last_item_id);
+        });
         self.database.write_db(&state)?;
         Ok(state.last_item_id)
     }
 
     pub fn delete_epic(&self, epic_id: u32) -> Result<()> {
         let mut state = self.database.read_db()?;
-        state.epics.remove(&epic_id);
+        state
+            .epics
+            .remove(&epic_id)
+            .ok_or(anyhow!("No epics found with id {epic_id}"))?;
         self.database.write_db(&state)?;
         Ok(())
     }
 
     pub fn delete_story(&self, epic_id: u32, story_id: u32) -> Result<()> {
         let mut state = self.database.read_db()?;
-        state.stories.remove(&story_id);
-        state.epics.entry(epic_id).and_modify(|epic| {epic.stories.remove(story_id.try_into().unwrap());});
+        state
+            .stories
+            .remove(&story_id)
+            .ok_or(anyhow!("No stories found with id {story_id}"))?;
+        state.epics.entry(epic_id).and_modify(|epic| {
+            epic.stories.remove(&story_id);
+        });
         self.database.write_db(&state)?;
         Ok(())
     }
 
     pub fn update_epic_status(&self, epic_id: u32, status: Status) -> Result<()> {
         let mut state = self.database.read_db()?;
-        state.epics.entry(epic_id).and_modify(|epic| epic.status = status);
-        self.database.write_db(&state)?;
-        Ok(())
+        match state.epics.contains_key(&epic_id) {
+            false => Err(anyhow!("Database has no epic with key {epic_id}")),
+            true => {
+                state
+                    .epics
+                    .entry(epic_id)
+                    .and_modify(|epic| epic.status = status);
+                self.database.write_db(&state)?;
+                Ok(())
+            }
+        }
     }
 
     pub fn update_story_status(&self, story_id: u32, status: Status) -> Result<()> {
         let mut state = self.database.read_db()?;
-        state.stories.entry(story_id).and_modify(|story| story.status = status);
-        self.database.write_db(&state)?;
-        Ok(())
+        match state.stories.contains_key(&story_id) {
+            false => Err(anyhow!("Database has no story with key {story_id}")),
+            true => {
+                state
+                    .stories
+                    .entry(story_id)
+                    .and_modify(|story| story.status = status);
+                self.database.write_db(&state)?;
+                Ok(())
+            }
+        }
     }
 }
 
@@ -111,14 +139,12 @@ pub mod test_utils {
 
     impl Database for MockDB {
         fn read_db(&self) -> Result<DBState> {
-            // TODO: fix this error by deriving the appropriate traits for Story
             let state = self.last_written_state.borrow().clone();
             Ok(state)
         }
 
         fn write_db(&self, db_state: &DBState) -> Result<()> {
             let latest_state = &self.last_written_state;
-            // TODO: fix this error by deriving the appropriate traits for DBState
             *latest_state.borrow_mut() = db_state.clone();
             Ok(())
         }
@@ -474,7 +500,7 @@ mod tests {
                 name: "epic 1".to_owned(),
                 description: "epic 1".to_owned(),
                 status: Status::Open,
-                stories: vec![2],
+                stories: HashSet::from([2]),
             };
 
             let mut stories = HashMap::new();
