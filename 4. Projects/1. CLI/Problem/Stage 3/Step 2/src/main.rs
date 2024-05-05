@@ -14,16 +14,29 @@ mod navigator;
 use navigator::*;
 
 fn main() {
-    // TODO: create database and navigator
-    
+    let data = "./data/db.json".to_owned();
+    let mut nav = Navigator::new(Rc::new(JiraDatabase::new(data)));
     loop {
         clearscreen::clear().unwrap();
+        let Some(page) = nav.get_current_page() else {
+            break;
+        };
 
-        // TODO: implement the following functionality:
-        // 1. get current page from navigator. If there is no current page exit the loop.
-        // 2. render page
-        // 3. get user input
-        // 4. pass input to page's input handler
-        // 5. if the page's input handler returns an action let the navigator process the action
+        let Ok(_) = page.draw_page() else {
+            println!("Something went wrong. Press any key to try again.");
+            wait_for_key_press();
+            continue;
+        };
+
+        let Ok(Some(action)) = page.handle_input(get_user_input().as_str()) else {
+            println!("Something went wrong. Press any key to try again.");
+            wait_for_key_press();
+            continue;
+        };
+        let Ok(_) = nav.handle_action(action) else {
+            println!("Something went wrong. Press any key to try again.");
+            wait_for_key_press();
+            continue;
+        };
     }
 }
