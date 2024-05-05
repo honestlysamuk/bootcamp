@@ -28,13 +28,14 @@ fn main() {
             continue;
         };
 
-        let Ok(Some(action)) = page.handle_input(get_user_input().as_str()) else {
-            println!("Something went wrong. Press any key to try again.");
+        let input = get_user_input().trim().to_owned();
+        let Ok(Some(action)) = page.handle_input(input.as_str()) else {
+            println!("{input} is not an option. Press any key to try again.");
             wait_for_key_press();
             continue;
         };
-        let Ok(_) = nav.handle_action(action) else {
-            println!("Something went wrong. Press any key to try again.");
+        if let Err(e) = nav.handle_action(action) {
+            println!("Something went wrong: {e}. Press any key to try again.");
             wait_for_key_press();
             continue;
         };
