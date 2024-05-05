@@ -1,5 +1,7 @@
 use ellipse::Ellipse;
 
+use crate::models::Epic;
+
 pub fn get_column_string(text: &str, width: usize) -> String {
     let string = if text.len() <= width {
         text.to_owned()
@@ -9,6 +11,13 @@ pub fn get_column_string(text: &str, width: usize) -> String {
         ".".repeat(width).to_owned()
     };
     format!("{string:<width$.*}", width)
+}
+
+pub fn format_jira_epic(epic_id: u32, epic: &Epic) -> String {
+    let id_text = get_column_string(&format!("{}", &epic_id), 12);
+    let name_text = get_column_string(&format!("{}", &epic.name), 34);
+    let status_text = get_column_string(&format!("{:?}", &epic.status), 18);
+    format!("{}|{}|{}", id_text, name_text, status_text)
 }
 
 #[cfg(test)]
