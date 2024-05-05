@@ -109,7 +109,7 @@ impl JiraDatabase {
         parsed
             .stories
             .get_mut(&story_id)
-            .ok_or_(anyhow!("could not find story in database!"))?
+            .ok_or(anyhow!("could not find story in database!"))?
             .status = status;
 
         self.database.write_db(&parsed)?;
