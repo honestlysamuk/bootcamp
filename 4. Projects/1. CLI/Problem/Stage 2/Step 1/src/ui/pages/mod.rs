@@ -46,7 +46,18 @@ impl Page for HomePage {
             "c" => Ok(Some(Action::CreateEpic)),
             digit => match digit.parse() {
                 Err(_) => Ok(None),
-                Ok(epic_id) => Ok(Some(Action::NavigateToEpicDetail { epic_id })),
+                Ok(epic_id) => {
+                    let epic_id = self
+                        .db
+                        .read_db()?
+                        .epics
+                        .contains_key(&epic_id)
+                        .then(|| epic_id);
+                    match epic_id {
+                        None => Ok(None),
+                        Some(epic_id) => Ok(Some(Action::NavigateToEpicDetail { epic_id })),
+                    }
+                }
             },
         }
     }
